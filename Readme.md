@@ -71,7 +71,7 @@ services:
     environment:
       - KAFKA_BROKERCONNECT=redpanda:9092
     ports:
-      - '9000:9000'
+      - '19000:9000'
     depends_on:
       - redpanda
 
@@ -244,6 +244,9 @@ You should see the JSON messages forwarded from MQTT.
 ## 6) Create ClickHouse table
 
 Connect to ClickHouse HTTP interface (port 8123) using the client or curl. Example DDL — create a wide table suitable for JSON ingestion:
+
+### connect to clickhouse dbms
+docker exec -it <container-id> clickhouse-client
 
 ```sql
 CREATE DATABASE IF NOT EXISTS iot;
