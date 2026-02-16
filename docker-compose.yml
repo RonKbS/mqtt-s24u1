@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto
+    ports:
+      - '1883:1883'
+      - '9001:9001' # websocket (optional)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  redpanda:
+    image: redpandadata/redpanda:latest-fips
+    container_name: redpanda
+    command: ["redpanda", "start", "--overprovisioned", "--smp", "1", "--memory", "1G", "--reserve-memory", "0M", "--node-id", "0", "--check=false"]
+    ports:
+      - '9092:9092'
+      - '8082:8082' # Admin / REST (if needed)
+    environment:
+      - REDPANDA_AUTO_CREATE_TOPICS=true
+
+  clickhouse:
+    image: yandex/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - '8123:8123'
+      - '9000:9000'
+    volumes:
+      - ./clickhouse/config:/etc/clickhouse-server/config.d
+      - ./clickhouse/data:/var/lib/clickhouse
+
+  kafkacat-ui:
+    image: obsidiandynamics/kafdrop:latest
+    container_name: kafkacat_ui
+    environment:
+      - KAFKA_BROKERCONNECT=redpanda:9092
+    ports:
+      - '19000:9000'
+    depends_on:
+      - redpanda
+
+networks:
+  default:
+    driver: bridge
