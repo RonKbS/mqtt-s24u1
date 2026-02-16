@@ -254,14 +254,26 @@ CREATE DATABASE IF NOT EXISTS iot;
 CREATE TABLE IF NOT EXISTS iot.telemetry (
   device_id String,
   ts UInt32,
-  lat Float64,
-  lon Float64,
-  battery UInt8,
-  accel Nested(x Float32, y Float32, z Float32),
+
+  -- battery/system fields
+  present Bool,
+  status String,
+  health String,
+  level UInt8,
+  scale UInt16,
+  batteryPct Float32,
+  plugged String,
+  m_voltage UInt32,
+  c_temperature Float32,
+  technology String,
+  battery_state Nullable(String),
+
+  -- pipeline metadata
   topic String,
   received_at UInt32
 ) ENGINE = MergeTree()
 ORDER BY (device_id, ts);
+
 ```
 
 Run via `clickhouse-client` (if installed) or HTTP API:
@@ -281,7 +293,9 @@ This service consumes from the `telemetry` Kafka topic, normalizes JSON, and ins
 Install dependencies (in a new/active venv):
 
 ```bash
-pip install kafka-python clickhouse-connect or clickhouse-driver orjson
+pip install kafka-python clickhouse-connect orjson
+# OR
+pip install clickhouse-driver # connect is officially from clickouse so choosing it over ~-driver
 ```
 
 Save as `kafka_to_clickhouse.py`:
@@ -312,22 +326,36 @@ for msg in consumer:
         rec = msg.value
         payload = rec.get('payload', {})
         topic = rec.get('topic', '')
-        # Flatten nested structure safely
-        device_id = payload.get('device_id', 'unknown')
-        ts = int(payload.get('ts', int(time.time())))
-        lat = float(payload.get('lat', 0.0))
-        lon = float(payload.get('lon', 0.0))
-        battery = int(payload.get('battery', 0))
-        accel = payload.get('accel', {})
-        ax = float(accel.get('x', 0.0))
-        ay = float(accel.get('y', 0.0))
-        az = float(accel.get('z', 0.0))
 
-        row = [device_id, ts, lat, lon, battery, ax, ay, az, topic, int(rec.get('received_at', int(time.time())))]
+        # External metadata (not from payload)
+        device_id = rec.get('device_id', 'unknown')
+        ts = int(rec.get('received_at', int(time.time())))
+
+        # Battery payload fields
+        present = bool(payload.get('present', False))
+        status = str(payload.get('status', 'unknown'))
+        health = str(payload.get('health', 'unknown'))
+
+        level = int(payload.get('level', 0))
+        scale = int(payload.get('scale', 100))
+        battery_pct = float(payload.get('batteryPct', 0.0))
+
+        plugged = str(payload.get('plugged', 'unknown'))
+        voltage_mv = int(payload.get('m_voltage', 0))
+        temperature_c = float(payload.get('c_temperature', 0.0))
+        technology = str(payload.get('technology', 'unknown'))
+        battery_state = str(payload.get('battery_state', 'null'))
+
+        row = [
+            device_id, ts, present, status, health, level, scale, battery_pct, plugged, voltage_mv, temperature_c, technology, battery_state, topic, int(time.time())
+        ]
+
         ch.insert('iot.telemetry', [row])
         print('Inserted into ClickHouse:', row)
+
     except Exception as e:
         print('Error processing message:', e)
+
 ```
 
 Run it:

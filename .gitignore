@@ -2,3 +2,8 @@
 clickhouse/data/*
 
 **/*.db
+
+env
+
+.env
+
